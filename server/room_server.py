@@ -138,6 +138,8 @@ def init_db():
             con.execute("ALTER TABLE presence ADD COLUMN host TEXT")
         if "travel" not in cols:
             con.execute("ALTER TABLE presence ADD COLUMN travel TEXT")
+        if "card" not in cols:
+            con.execute("ALTER TABLE presence ADD COLUMN card TEXT")
         room_cols = {row[1] for row in con.execute("PRAGMA table_info(room)")}
         if "open" not in room_cols:
             con.execute("ALTER TABLE room ADD COLUMN open INTEGER NOT NULL DEFAULT 0")
@@ -328,6 +330,48 @@ def clean_travel(raw):
     return json.dumps(out, ensure_ascii=False, separators=(",", ":"))
 
 
+def clean_card(raw):
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except (TypeError, json.JSONDecodeError):
+            return ""
+    if not isinstance(raw, dict):
+        return ""
+
+    def clip(value):
+        text = "".join(ch for ch in str(value or "") if ch >= " " and ch != "\x7f").strip()
+        return text[:80]
+
+    out = {}
+    if isinstance(raw.get("arm"), bool):
+        out["arm"] = raw["arm"]
+    if isinstance(raw.get("watch"), bool):
+        out["watch"] = raw["watch"]
+    names = []
+    for item in raw.get("contracts") or []:
+        title = clip(item)
+        if title and title not in names:
+            names.append(title)
+        if len(names) == 8:
+            break
+    if names:
+        out["contracts"] = names
+    tracked = clip(raw.get("track"))
+    if tracked:
+        out["track"] = tracked
+    if not out:
+        return ""
+    return json.dumps(out, ensure_ascii=False, separators=(",", ":"))
+
+
+def card_obj(raw):
+    text = clean_card(raw)
+    if not text:
+        return None
+    return json.loads(text)
+
+
 def travel_obj(raw):
     if not raw:
         return None
@@ -346,12 +390,16 @@ def save_presence(con, room, member, body):
     loc = str(body.get("location") or "")[:80]
     sys = str(body.get("system") or "")[:40]
     code_loc = str(body.get("code") or "")[:80]
-    if not loc and not code_loc:
-        return False
     old = con.execute(
-        "SELECT ship, gear, host, travel FROM presence WHERE room=? AND member=?",
+        "SELECT location, system, code, ship, gear, host, travel, card FROM presence WHERE room=? AND member=?",
         (room, member),
     ).fetchone()
+    if not loc and not code_loc and old:
+        loc = old["location"] or ""
+        sys = old["system"] or sys
+        code_loc = old["code"] or ""
+    if not loc and not code_loc and "card" not in body:
+        return False
     if "ship" in body:
         ship_name = str(body.get("ship") or "")[:80]
     else:
@@ -368,17 +416,24 @@ def save_presence(con, room, member, body):
         travel = clean_travel(body.get("travel")) if isinstance(body.get("travel"), dict) else ""
     else:
         travel = (old["travel"] if old and old["travel"] else "") or ""
+    if "card" in body:
+        card = clean_card(body.get("card"))
+    else:
+        card = (old["card"] if old and old["card"] else "") or ""
+    if not loc and not code_loc and not card:
+        return False
     con.execute(
         """
-        INSERT INTO presence (room, member, location, system, code, seen, ship, gear, host, travel)
-        VALUES (?,?,?,?,?,?,?,?,?,?)
+        INSERT INTO presence (room, member, location, system, code, seen, ship, gear, host, travel, card)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?)
         ON CONFLICT(room, member) DO UPDATE SET
           location=excluded.location, system=excluded.system,
           code=excluded.code, seen=excluded.seen,
           ship=excluded.ship, gear=excluded.gear,
-          host=excluded.host, travel=excluded.travel
+          host=excluded.host, travel=excluded.travel,
+          card=excluded.card
         """,
-        (room, member, loc, sys, code_loc, now(), ship_name, worn, host_id, travel),
+        (room, member, loc, sys, code_loc, now(), ship_name, worn, host_id, travel, card),
     )
     return True
 
@@ -397,7 +452,7 @@ def room_state(con, code, me):
     role = "captain" if room["captain"] == me["id"] else "member"
     rows = con.execute(
         """
-        SELECT m.id, m.nickname, s.status, p.location, p.system, p.code, p.seen, p.ship, p.gear, p.host, p.travel
+        SELECT m.id, m.nickname, s.status, p.location, p.system, p.code, p.seen, p.ship, p.gear, p.host, p.travel, p.card
         FROM membership s
         JOIN member m ON m.id = s.member
         LEFT JOIN presence p ON p.room = s.room AND p.member = s.member
@@ -425,6 +480,7 @@ def room_state(con, code, me):
                 "gear": gear_items(r["gear"]),
                 "server": r["host"] or "",
                 "travel": travel_obj(r["travel"]),
+                "card": card_obj(r["card"]),
                 "online": bool(r["seen"] and now() - r["seen"] < ONLINE_S),
             }
         )
@@ -654,6 +710,7 @@ def players_json(con, code, me):
                 "gear": m.get("gear") or [],
                 "server": m.get("server") or "",
                 "travel": m.get("travel"),
+                "card": m.get("card"),
             }
         )
     return {"players": out}

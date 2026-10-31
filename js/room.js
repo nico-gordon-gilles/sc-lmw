@@ -1015,7 +1015,8 @@
     var when = typeof m.seen==='number' ? new Date(m.seen*1000).toISOString() : '';
     return {id:m.id, name:m.nickname||'', online:isOnline(m), last_seen:when, when:when,
       code:m.code||'', location:m.location||'', system:m.system||'', ship:m.ship||'',
-      gear:Array.isArray(m.gear)?m.gear:[], server:m.server||'', travel:m.travel||null};
+      gear:Array.isArray(m.gear)?m.gear:[], server:m.server||'', travel:m.travel||null,
+      card:m.card&&typeof m.card==='object'?m.card:null};
   }
   function serverSplit(list){
     var counts = {};

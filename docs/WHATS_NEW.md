@@ -24,6 +24,7 @@ The interface is Simplified Chinese, Traditional Chinese, English, and German. T
 - **The captain can move to a new browser.** Creating a room shows a recovery code. Only the captain can open it again. Room code plus that code takes the captain role. If that browser has been polling within two minutes, the previous captain stays as a member. Otherwise that empty seat is removed. After seven days without a room poll, the captain role passes to the earliest member. If nobody else remains, the room is deleted. Opening another room with the same browser still leaves the previous room immediately, and the earliest member becomes captain.
 - **The home page is one plate.** Joining a room sits beside the Starfix notes. The fan-site notice runs along the bottom of that plate. A flat grid moves behind it.
 - **Opening the page no longer builds the star map.** The 3D engine, the place-name pack, and the map itself start when you enter the map.
+- **The pilot card drops amenities and terminals.** It shows armistice, a monitored area, the contract being tracked, and the accepted contracts. A quantum start that names a place is used when the zone line is missing. Failures, revocations, and shared contracts stay in the personal record on this computer.
 
 ## Deutsch
 
@@ -45,6 +46,7 @@ The interface is Simplified Chinese, Traditional Chinese, English, and German. T
 - **Der Captain kann in einen neuen Browser wechseln.** Beim Anlegen erscheint ein Wiederherstellungscode. Nur der Captain kann ihn erneut öffnen. Raumcode und dieser Code übernehmen den Captain. Hat dieser Browser in den letzten zwei Minuten abgefragt, bleibt der vorige Captain als Mitglied. Sonst wird der leere Platz entfernt. Nach sieben Tagen ohne Raumabfrage geht der Captain an das früheste Mitglied. Bleibt niemand sonst, wird der Raum gelöscht. Wer mit demselben Browser einen anderen Raum öffnet, verlässt den vorigen sofort, und das früheste Mitglied wird Captain.
 - **Die Startseite ist eine Tafel.** Der Beitritt steht neben den Starfix-Hinweisen. Der Fan-Hinweis läuft am unteren Rand dieser Tafel. Dahinter läuft ein flaches Gitter.
 - **Beim Öffnen der Seite wird die Sternenkarte nicht mehr aufgebaut.** Die 3D-Engine, das Ortsnamenpaket und die Karte selbst starten erst beim Einstieg in die Karte.
+- **Die Pilotenkarte lässt Ausstattung und Terminals weg.** Sie zeigt Waffenruhe, Überwachung, den verfolgten Auftrag und die angenommenen Aufträge. Fehlt die Zonenzeile, gilt der Ortsname am Start einer Quantum-Route. Fehlschlag, Widerruf und geteilte Aufträge bleiben im persönlichen Verlauf auf diesem Computer.
 
 ## 简体中文
 
@@ -66,6 +68,7 @@ The interface is Simplified Chinese, Traditional Chinese, English, and German. T
 - **队长可以换到新的浏览器。** 建立房间时会给出恢复码，之后只有队长能再打开它。房间码加上这组码就能接管队长。旧浏览器两分钟内还在轮询时，原来的队长留在房间里当队员；否则这个空位会被删掉。连续七天没有轮询房间时，队长交给最早加入的队员。如果已经没有其他队员，房间会被删掉。同一个人用原来的浏览器另开房间，会马上离开旧房间，队长立刻交给最早加入的队员。
 - **首页收成一块。** 进入房间和 Starfix 的说明并排。粉丝站声明在这一块的下方。后面是一块平的、慢慢走的网格。
 - **打开页面时不再把星图建出来。** 三维引擎、地名包和星图本身，改到进入星图时再开始。
+- **个人信息卡片不再列出设施和终端。** 卡片显示禁火区、监管区域、正在追踪的合约和已接受的合约。日志里没有换区行时，用量子航线写下的地名。失败、撤销和共享的合约留在本机记录里。
 
 ## 繁體中文
 
@@ -87,3 +90,4 @@ The interface is Simplified Chinese, Traditional Chinese, English, and German. T
 - **隊長可以換到新的瀏覽器。** 建立房間時會給出恢復碼，之後只有隊長能再打開它。房間碼加上這組碼就能接管隊長。舊瀏覽器兩分鐘內還在輪詢時，原來的隊長留在房間裡當隊員；否則這個空位會被刪掉。連續七天沒有輪詢房間時，隊長交給最早加入的隊員。如果已經沒有其他隊員，房間會被刪掉。同一個人用原來的瀏覽器另開房間，會馬上離開舊房間，隊長立刻交給最早加入的隊員。
 - **首頁收成一塊。** 進入房間和 Starfix 的說明並排。粉絲站聲明在這一塊的下方。後面是一塊平的、慢慢走的網格。
 - **打開頁面時不再把星圖建出來。** 三維引擎、地名包和星圖本身，改到進入星圖時再開始。
+- **個人資訊卡片不再列出設施和終端。** 卡片顯示禁火區、監管區域、正在追蹤的合約和已接受的合約。日誌裡沒有換區行時，用量子航線寫下的地名。失敗、撤銷和共享的合約留在本機記錄裡。

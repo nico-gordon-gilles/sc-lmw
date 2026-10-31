@@ -14,7 +14,7 @@ MAKER_NAME = {
     "VNCL": "Vanduul", "MRAI": "Mirai",
 }
 BODY_N = {"1": "HUR", "2": "CRU", "3": "ARC", "4": "MIC"}
-MISSION_PREFIX = ("已接受合约", "新任务", "任务完成")
+MISSION_PREFIX = ("已接受合约", "新任务", "任务完成", "合约完成", "合约失败", "任务撤销", "合约共享")
 KEEP = 4000
 
 TIME_RE = re.compile(r"<(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)>")
@@ -33,7 +33,8 @@ TRANS = re.compile(
     r"Transitioning from zone [\w.-]+ in [\w.-]+ to zone ([\w.-]+) in [\w.-]+",
     re.I,
 )
-END_RE = re.compile(r"CompletionType\[(Complete|Abandon)\]")
+END_RE = re.compile(r"CompletionType\[(Complete|Abandon|Fail)\]")
+GEN_RE = re.compile(r"Generated Locations - .*?\(([^\[\]()]{1,40}) \[\d+\] \[[A-Za-z0-9_]+\]\)")
 
 LOCK = threading.Lock()
 EVENTS = []
@@ -178,6 +179,12 @@ def parse(line, state):
     end = END_RE.search(line)
     if end and "EndMission" in line:
         rows.append(event(stamp, "contract", result=end.group(1).lower()))
+    gen = GEN_RE.search(line)
+    if gen:
+        site = gen.group(1).strip()
+        if site and site != state.get("target"):
+            state["target"] = site
+            rows.append(event(stamp, "mission", say=site[:180], code=""))
     if "Action: Next" in line:
         note = NOTE_RE.search(line)
         if note:

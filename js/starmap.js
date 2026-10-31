@@ -101,8 +101,19 @@ function gnLine(s){
 }
 SC.gnLine=gnLine;
 function translated(s){ if(s==null||s==='') return ''; var hit=gn(s); return (hit && hit!==String(s)) ? hit : ''; }
+function placeEnglish(p){
+  var raw=p&&p.location;
+  if(!raw||!SC.loc||typeof SC.loc.english!=='function') return '';
+  return SC.loc.english(raw)||'';
+}
+function systemOnlyName(en){
+  var m=String(en||'').match(/^(Stanton|Pyro|Nyx)\s+System$/i);
+  return m?m[1].toLowerCase():'';
+}
 function playerPlaceName(p){
   if(!p) return '';
+  var en=placeEnglish(p);
+  if(en){ var shown=translated(en); return shown||en; }
   var direct=translated(p.location); if(direct) return direct;
   var loc=stPlayerLoc(p);
   if(loc&&loc.n){ var named=translated(loc.n); if(named) return named; if(String(loc.n)!==String(p.location||'')) return gn(loc.n); }
@@ -198,9 +209,15 @@ async function stLoadPlayers(){ try{ const cfg=window.LIVEMAP_CONFIG||{};
     const r=await fetch(cfg.PLAYERS_URL||pathOf('players.example.json'),{headers:cfg.PLAYERS_HEADERS||{},cache:'no-store'});
     if(!r.ok) throw new Error(r.status);
     const d=await r.json(); ST_PL=d.players||[]; ST_PL_ERR=''; }catch(e){ ST_PL_ERR='Spielerdaten gerade nicht erreichbar.'; if(!ST_PL) ST_PL=[]; }
-  const sig=JSON.stringify(ST_PL.map(p=>[p.id,p.online,p.code,p.ship])); const ch=sig!==ST_PL_SIG; ST_PL_SIG=sig; return ch; }
+  const sig=JSON.stringify(ST_PL.map(p=>[p.id,p.online,p.code,p.location,p.ship,p.card])); const ch=sig!==ST_PL_SIG; ST_PL_SIG=sig; return ch; }
 const ST_ABBR={HUR:'Stanton1',CRU:'Stanton2',ARC:'Stanton3',MIC:'Stanton4'};
-function stPlayerLoc(p){ const D=ST_DATA; if(!D||!p) return null; const nm=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+function stPlayerLoc(p){ const D=ST_DATA; if(!D||!p) return null;
+  var en=placeEnglish(p), sysOnly=systemOnlyName(en);
+  if(en && !sysOnly){
+    var lag=en.match(/^(HUR|CRU|ARC|MIC)-L(\d)\b/i);
+    p=Object.assign({}, p, {location:en, code:p.code||(lag?('RR_'+lag[1].toUpperCase()+'_L'+lag[2]):''), system:p.system||(lag?'Stanton':'')});
+  } else if(sysOnly && !p.code) return null;
+  const nm=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
   const foldCode=s=>String(s||'').trim().replace(/[\s-]+/g,'_').replace(/_+/g,'_').replace(/^RR_S([1-4])_/i,(m,n)=>'RR_'+['HUR','CRU','ARC','MIC'][n-1]+'_');
   let code=foldCode(p.code); const locCode=foldCode(p.location); if(!code && /^RR_/i.test(locCode)) code=locCode;
   const low=code.toLowerCase();
@@ -279,6 +296,17 @@ function pilotAge(p){ const d=Date.parse(String(p.when||p.last_seen||'').replace
   if(s<5) return _t('time.just_now');
   if(s<60) return _t('time.ago_sec',{n:s});
   return stAgo(p.when||p.last_seen); }
+function pilotCard(p){ const c=p&&p.card&&typeof p.card==='object'?p.card:{}; return c; }
+function pilotFacts(p){ const c=pilotCard(p), rows=[];
+  if(c.arm===true) rows.push([_t('pilot.arm'), _t('pilot.arm.in')]);
+  else if(c.arm===false) rows.push([_t('pilot.arm'), _t('pilot.arm.out')]);
+  if(c.watch===true) rows.push([_t('pilot.watch'), _t('pilot.watch.in')]);
+  else if(c.watch===false) rows.push([_t('pilot.watch'), _t('pilot.watch.out')]);
+  if(c.track) rows.push([_t('pilot.track'), String(c.track)]);
+  return rows; }
+function pilotContracts(p){ const names=(pilotCard(p).contracts||[]).filter(Boolean);
+  if(!names.length) return '';
+  return '<div class="st-call-sec">'+esc(_t('pilot.contracts'))+'</div><div class="st-call-cons">'+names.map(function(n){ return '<b>'+esc(String(n))+'</b>'; }).join('')+'</div>'; }
 function pilotRows(p){ const loc=stPlayerLoc(p), body=loc?stBodyOf(loc):null, rows=[[_t('pilot.place'), playerPlaceName(p)||_t('location.unknown')]];
   if(loc&&loc.k) rows.push([_t('pilot.kind'), kindLabel(loc.k)]);
   const sys=loc?stSysName(loc):(p.system?gn(p.system):''); if(sys) rows.push([_t('pilot.system'), sys]);
@@ -286,17 +314,12 @@ function pilotRows(p){ const loc=stPlayerLoc(p), body=loc?stBodyOf(loc):null, ro
   if(p.code) rows.push([_t('pilot.code'), String(p.code)]);
   if(p.server) rows.push([_t('pilot.server'), String(p.server)]);
   const trip=travelBlurb(p); if(trip) rows.push([_t('pilot.travel'), trip]);
+  const only=systemOnlyName(placeEnglish(p));
+  if(!loc && only && !rows.some(function(r){ return r[0]===_t('pilot.system'); })) rows.push([_t('pilot.system'), gn(only.charAt(0).toUpperCase()+only.slice(1))]);
+  pilotFacts(p).forEach(function(r){ rows.push(r); });
   return rows; }
-function placeChips(title, items){ if(!items||!items.length) return '';
-  return '<div class="st-call-sec">'+esc(title)+'</div><div class="st-chips">'+items.map(function(a){ return '<span>'+esc(a)+'</span>'; }).join('')+'</div>'; }
-function placeExtra(p){ const loc=stPlayerLoc(p); if(!loc) return '';
-  let h='';
-  if(typeof loc.x==='number') h+='<p class="st-call-dist">'+esc(_t('coord.from_star',{dist:stDist(Math.hypot(loc.x,loc.y,loc.z)),x:tn(Math.round(loc.x)),y:tn(Math.round(loc.y)),z:tn(Math.round(loc.z))}))+'</p>';
-  const am=(loc.am||[]).map(function(a){ const z=gnLine(a); return (z&&z!==a)?z:(ST_LANG==='de'?(ST_AM_DE[a]||a):a); });
-  const terms=(loc.terms||[]).map(function(t){ return gnLine(t.n||''); }).filter(Boolean);
-  h+=placeChips(_t('label.amenities'), am);
-  h+=placeChips(_t('label.terminals',{n:terms.length}), terms);
-  return h; }
+function placeExtra(p){ const loc=stPlayerLoc(p); if(!loc||typeof loc.x!=='number') return '';
+  return '<p class="st-call-dist">'+esc(_t('coord.from_star',{dist:stDist(Math.hypot(loc.x,loc.y,loc.z)),x:tn(Math.round(loc.x)),y:tn(Math.round(loc.y)),z:tn(Math.round(loc.z))}))+'</p>'; }
 function travelBlurb(p){ const tr=p&&p.travel; if(!tr||!(tr.to||tr.from)) return '';
   const to=gn(tr.to||'');
   if(tr.mode==='aim') return _t('travel.to',{to:to});
@@ -369,7 +392,7 @@ function ensurePilotUi(){ if(!ROOT||$('stCall')) return;
   ico.addEventListener('pointerup', endIco); ico.addEventListener('pointercancel', endIco);
 }
 function paintPilot(p){ ensurePilotUi(); const box=$('stCall'); if(!box||!p) return;
-  const bits=pilotBits(p), rows=pilotRows(p), extra=placeExtra(p), sig=JSON.stringify([ST_LANG,p.name,p.player,!!p.online,bits.place,bits.ship,bits.gear,rows,extra,p.code]);
+  const bits=pilotBits(p), rows=pilotRows(p), extra=placeExtra(p)+pilotContracts(p), sig=JSON.stringify([ST_LANG,p.name,p.player,!!p.online,bits.place,bits.ship,bits.gear,rows,extra,p.code,p.card]);
   if(box.dataset.sig!==sig){ box.dataset.sig=sig;
     const nm=p.name||p.player||_t('entity.player'); box.querySelector('.st-call-name').textContent=nm; box.setAttribute('aria-label', nm);
     box.querySelector('.st-call-status').textContent=p.online?_t('status.online'):_t('status.offline');
@@ -2075,7 +2098,7 @@ function mount(el, opts){
       try{ enterStExplore(); }catch(e){ fail(e); return; }
       done();
     }
-    var locP=(SC.loc&&SC.loc.ready)?SC.loc.ready():Promise.resolve();
+    var locP=(SC.loc&&SC.loc.index)?SC.loc.index():((SC.loc&&SC.loc.ready)?SC.loc.ready():Promise.resolve());
     var threeP=SC.loadThreeCore?SC.loadThreeCore():(SC.loadThree?SC.loadThree():Promise.resolve());
     Promise.all([locP, threeP]).then(boot).catch(boot);
     return sceneArm;

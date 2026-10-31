@@ -843,6 +843,7 @@
 .sc-lmw .st-call-place:empty{display:none}
 .sc-lmw .st-call-dist{margin:8px 0 0;color:var(--sclmw-muted);font-size:12px}
 .sc-lmw .st-call-sec{margin:10px 0 4px;color:var(--sclmw-cyan);font-size:12px;font-weight:700}
+.sc-lmw .st-call-cons b{display:block;margin-top:4px;font-size:13px;font-weight:650;line-height:1.4}
 .sc-lmw .st-call .st-chips span{font-size:12px}
 .sc-lmw .st-call-gear{margin-top:8px}
 .sc-lmw .st-call-gear p{margin:0;color:var(--sclmw-muted);font-size:13px}

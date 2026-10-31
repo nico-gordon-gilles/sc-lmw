@@ -124,6 +124,19 @@ SERVER = ""
 SERVER_KIND = ""
 TRAVEL = None
 LAST_SIG = ""
+ARM = None
+WATCH = None
+CONTRACTS = {}
+TRACK = ""
+ZERO_MID = "00000000-0000-0000-0000-000000000000"
+NOTE_ADD_RE = re.compile(
+    r'Added notification "(?P<text>[^"]*)".*?MissionId: \[(?P<mid>[0-9a-f-]{36})\]',
+    re.I,
+)
+END_CARD_RE = re.compile(
+    r"MissionId\[(?P<mid>[0-9a-f-]{36})\].*?CompletionType\[(?P<end>Complete|Fail|Abandon)\]",
+    re.I,
+)
 
 LOCK = threading.Lock()
 STOP = threading.Event()
@@ -233,6 +246,83 @@ def tidy_place(place):
     return out
 
 
+def contract_title(text):
+    raw = (text or "").strip().rstrip(":：").strip()
+    for prefix in ("已接受合约", "合约完成", "合约失败", "任务撤销", "新任务", "合约共享"):
+        if raw.startswith(prefix):
+            rest = raw[len(prefix):].lstrip(":：").strip().rstrip(":：").strip()
+            return prefix, rest[:80]
+    return "", raw[:80]
+
+
+def drop_contract(mid):
+    global TRACK
+    if not mid or mid == ZERO_MID:
+        return
+    CONTRACTS.pop(mid, None)
+    if TRACK == mid:
+        TRACK = ""
+
+
+def note_card(text):
+    global ARM, WATCH, TRACK
+    if "Added notification" in text:
+        if "正在远离禁火区" in text:
+            ARM = False
+        elif "正在进入禁火区" in text:
+            ARM = True
+        if "离开监管区域" in text:
+            WATCH = False
+        elif "进入监管区域" in text:
+            WATCH = True
+        found = NOTE_ADD_RE.search(text)
+        if found:
+            prefix, title = contract_title(found.group("text"))
+            mid = found.group("mid").lower()
+            if mid and mid != ZERO_MID and prefix == "已接受合约" and title:
+                CONTRACTS[mid] = title
+                while len(CONTRACTS) > 12:
+                    CONTRACTS.pop(next(iter(CONTRACTS)))
+            elif prefix in ("合约完成", "合约失败", "任务撤销"):
+                drop_contract(mid)
+            elif prefix == "新任务" and mid and mid != ZERO_MID:
+                TRACK = mid
+    if "EndMission" in text or "Ending mission" in text:
+        found = END_CARD_RE.search(text)
+        if found:
+            drop_contract(found.group("mid").lower())
+
+
+def card_payload():
+    card = {}
+    if ARM is True or ARM is False:
+        card["arm"] = ARM
+    if WATCH is True or WATCH is False:
+        card["watch"] = WATCH
+    names = []
+    for title in CONTRACTS.values():
+        if title and title not in names:
+            names.append(title)
+        if len(names) == 8:
+            break
+    if names:
+        card["contracts"] = names
+    tracked = CONTRACTS.get(TRACK) or ""
+    if tracked:
+        card["track"] = tracked
+    return card or None
+
+
+def named_place(start):
+    start = (start or "").strip()
+    if not start:
+        return None
+    code, label = history.code_in_text(start)
+    if code:
+        return tidy_place({"code": code, "location": label or code, "system": "Stanton"})
+    return {"code": "", "location": start[:80], "system": ""}
+
+
 def lagrange_place(body, lag):
     if body in BODY_N:
         num = BODY_N[body]
@@ -313,6 +403,9 @@ def snapshot(place):
     }
     if SERVER:
         out["server"] = SERVER
+    card = card_payload()
+    if card:
+        out["card"] = card
     return out
 
 
@@ -320,10 +413,13 @@ def signature(payload):
     return json.dumps(
         [
             payload.get("code"),
+            payload.get("location"),
+            payload.get("system"),
             payload.get("ship"),
             payload.get("gear"),
             payload.get("server"),
             payload.get("travel"),
+            payload.get("card"),
         ],
         ensure_ascii=False,
         sort_keys=True,
@@ -333,6 +429,7 @@ def signature(payload):
 def ingest(line):
     global SHIP, DEST, TRAVEL
     text = line or ""
+    note_card(text)
     note_server(text)
     place = tidy_place(parse_line(text))
     if TRANS.search(text):
@@ -358,6 +455,11 @@ def ingest(line):
         nxt = jump_travel(jumped)
         if nxt:
             TRAVEL = nxt
+        named = named_place(jumped.group(1))
+        if named and named.get("code"):
+            place = named
+        elif named and not (place and place.get("code")):
+            place = named
     if ARRIVE_RE.search(text) and DEST:
         place = DEST
         TRAVEL = None
@@ -465,7 +567,11 @@ def post_place(place):
         STATE["place"] = place
         STATE["sentAt"] = time.strftime("%H:%M:%S")
         STATE["error"] = ""
-        STATE["status"] = "sent " + place["code"]
+        STATE["status"] = "sent " + (place.get("code") or place.get("location") or "card")
+
+
+def worth_sending(payload):
+    return bool(payload.get("code") or payload.get("location") or payload.get("card"))
 
 
 def consider(line, send):
@@ -474,13 +580,18 @@ def consider(line, send):
     place = ingest(line)
     with LOCK:
         current = STATE.get("place") or {}
-    base = place or (current if current.get("code") else None)
-    if not base or not base.get("code"):
+    if place and (place.get("code") or place.get("location")):
+        base = place
+    elif current.get("code") or current.get("location"):
+        base = current
+    else:
+        base = None
+    payload = snapshot(base or {})
+    if not worth_sending(payload):
         if not send:
             with LOCK:
-                STATE["place"] = snapshot(base or {})
+                STATE["place"] = payload
         return None
-    payload = snapshot(base)
     sig = signature(payload)
     if sig == LAST_SIG:
         return payload
@@ -506,7 +617,7 @@ def scan_tail():
     found = None
     for line in text.splitlines():
         place = ingest(line)
-        if place:
+        if place and (place.get("code") or place.get("location")):
             found = place
     payload = snapshot(found or {})
     with LOCK:
@@ -514,12 +625,16 @@ def scan_tail():
         STATE["offset"] = path.stat().st_size
         STATE["place"] = payload
         LAST_SIG = signature(payload)
-        if payload.get("code"):
+        mark = payload.get("code") or payload.get("location")
+        if mark:
             STATE["error"] = ""
-            STATE["status"] = "seen " + payload["code"]
+            STATE["status"] = "seen " + mark
+        elif payload.get("card"):
+            STATE["error"] = ""
+            STATE["status"] = "seen card"
         else:
             STATE["status"] = "no place in the recent log"
-    return payload if payload.get("code") else None
+    return payload if worth_sending(payload) else None
 
 
 def watch():
@@ -609,7 +724,7 @@ def set_running(on):
         scan_tail()
         with LOCK:
             place = STATE.get("place") or {}
-        if place.get("code") and CFG.get("token") and CFG.get("room"):
+        if worth_sending(place) and CFG.get("token") and CFG.get("room"):
             try:
                 post_place(place)
             except Exception as exc:
@@ -1512,6 +1627,59 @@ if __name__ == "__main__":
             "<2026-10-26T00:18:39.366Z> Legacy login success",
             trail,
         )[0]["kind"] == "online"
+        failed = history.parse(
+            "<2026-10-31T07:09:33.113Z> <EndMission> Ending mission for player. "
+            "MissionId[501fb222-f563-4a62-9d75-45ffe5191d85] CompletionType[Fail]",
+            trail,
+        )
+        assert failed and failed[0]["kind"] == "contract" and failed[0]["result"] == "fail"
+        shared = history.parse(
+            '<2026-10-31T08:10:33.922Z> Notification "合约共享：RSI 探索月：清剿犯罪据点:" , Action: Next',
+            trail,
+        )
+        assert shared and shared[0]["kind"] == "mission" and shared[0]["say"].startswith("合约共享")
+        target = history.parse(
+            "<2026-10-31T07:02:08.000Z> Generated Locations - variablename: LocationsToScan_BP, "
+            "locations: (赫斯顿洞穴 [4237976551] [Cave_Unoccupied_Stanton1]) contract: Shubin_RG",
+            trail,
+        )
+        assert target and target[0]["say"] == "赫斯顿洞穴"
+        named = ingest(
+            "CSCItemNavigation::CalculateRoute|Projected Start Location is 赫-L4 旋律领域站 "
+            "for route to destination MISSION_QT_Distress_Beacon_1"
+        )
+        assert named and named["code"] == "RR_HUR_L4", named
+        moon = ingest(
+            "CSCItemNavigation::CalculateRoute|Projected Start Location is 玛格达 "
+            "for route to destination NavPoint_Dynamic_1"
+        )
+        assert moon and moon["location"] == "玛格达" and moon["code"] == "", moon
+        ingest(
+            'Added notification "正在进入禁火区 - 禁止一切战斗行为: " [1] to queue. '
+            "MissionId: [00000000-0000-0000-0000-000000000000]"
+        )
+        ingest(
+            'Added notification "进入监管区域: " [2] to queue. '
+            "MissionId: [00000000-0000-0000-0000-000000000000]"
+        )
+        ingest(
+            'Added notification "已接受合约：RSI 探索月：拿下帮派领袖: " [3] to queue. '
+            "MissionId: [147e6324-1797-4c59-b552-190e0c43e732]"
+        )
+        ingest(
+            'Added notification "新任务：抵达 一个废弃前哨站: " [4] to queue. '
+            "MissionId: [147e6324-1797-4c59-b552-190e0c43e732]"
+        )
+        card = snapshot(moon)["card"]
+        assert card["arm"] is True and card["watch"] is True, card
+        assert card["contracts"] == ["RSI 探索月：拿下帮派领袖"], card
+        assert card["track"] == "RSI 探索月：拿下帮派领袖", card
+        ingest(
+            "<EndMission> MissionId[147e6324-1797-4c59-b552-190e0c43e732] CompletionType[Complete]"
+        )
+        gone = snapshot(moon).get("card") or {}
+        assert "contracts" not in gone and "track" not in gone, gone
+        assert gone["arm"] is True
         print("parser ok", got, SHIP, WORN["Armor_Torso"])
     else:
         main()

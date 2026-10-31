@@ -9,7 +9,7 @@
       off:'本机 Starfix 没开。先打开它，记录才会出现。',
       old:'这台 Starfix 还没有记录。用当前源码重新打开一次。',
       online:'上线', place:'进入 {code}',
-      done:'合约完成', abandon:'合约放弃',
+      done:'合约完成', abandon:'合约放弃', fail:'合约失败',
       buy:'购买 {item} × {qty}，标价 {price}',
       sell:'出售 {item} × {qty}，标价 {price}',
       shop:'商店 {shop}', ship:'驾驶 {ship}',
@@ -26,7 +26,7 @@
       off:'本機 Starfix 沒開。先打開它，記錄才會出現。',
       old:'這台 Starfix 還沒有記錄。用目前源碼重新打開一次。',
       online:'上線', place:'進入 {code}',
-      done:'合約完成', abandon:'合約放棄',
+      done:'合約完成', abandon:'合約放棄', fail:'合約失敗',
       buy:'購買 {item} × {qty}，標價 {price}',
       sell:'出售 {item} × {qty}，標價 {price}',
       shop:'商店 {shop}', ship:'駕駛 {ship}',
@@ -43,7 +43,7 @@
       off:'Starfix is not open on this computer.',
       old:'This Starfix has no log yet. Open it again from the current source.',
       online:'Signed in', place:'Entered {code}',
-      done:'Contract complete', abandon:'Contract abandoned',
+      done:'Contract complete', abandon:'Contract abandoned', fail:'Contract failed',
       buy:'Bought {item} × {qty}, listed {price}',
       sell:'Sold {item} × {qty}, listed {price}',
       shop:'Shop {shop}', ship:'Flew {ship}',
@@ -60,7 +60,7 @@
       off:'Starfix ist auf diesem Computer nicht geöffnet.',
       old:'Dieses Starfix hat noch keinen Verlauf. Öffne es erneut aus dem aktuellen Quelltext.',
       online:'Angemeldet', place:'Zone {code}',
-      done:'Auftrag abgeschlossen', abandon:'Auftrag abgebrochen',
+      done:'Auftrag abgeschlossen', abandon:'Auftrag abgebrochen', fail:'Auftrag fehlgeschlagen',
       buy:'Gekauft {item} × {qty}, Preis {price}',
       sell:'Verkauft {item} × {qty}, Preis {price}',
       shop:'Laden {shop}', ship:'Geflogen {ship}',
@@ -130,7 +130,7 @@
     var ship = ev.ship || '';
     if(ev.kind === 'online') return t('online');
     if(ev.kind === 'place') return fill('place', {code: ev.code || ''});
-    if(ev.kind === 'contract') return ev.result === 'abandon' ? t('abandon') : t('done');
+    if(ev.kind === 'contract') return ev.result === 'abandon' ? t('abandon') : (ev.result === 'fail' ? t('fail') : t('done'));
     if(ev.kind === 'mission') return ev.say || '';
     if(ev.kind === 'buy' || ev.kind === 'sell') return fill(ev.kind, {item: ev.item || '', qty: ev.qty || 0, price: ev.price || 0});
     if(ev.kind === 'ship') return fill('ship', {ship: ship});

@@ -11,7 +11,7 @@
   try{ mode=localStorage.getItem(MODE_KEY)||'auto'; }catch(e){}
   if(['auto','hans','hant','off','custom'].indexOf(mode)<0) mode='auto';
 
-  var pack=null, packWait=null, keys=null, keysWait=null;
+  var pack=null, packWait=null, keys=null, keysWait=null, REV=null;
   var custom=null; // {map, name, lines, cls}
   var active=null, activeClass=null;
   var userText=null, userName='';
@@ -39,7 +39,7 @@
   }
   function rebuild(){
     var r=resolved();
-    if(!r||!pack){ active=null; activeClass=null; return; }
+    if(!r||!pack){ active=null; activeClass=null; indexRev(); return; }
     var lang=r==='custom'?(fallbackLang()||'hans'):r;
     var baseDict=pack[lang]?Object.assign({}, pack[lang]):{};
     if(r==='custom'&&custom&&custom.map) Object.assign(baseDict, custom.map);
@@ -47,6 +47,22 @@
     var table=pack&&pack.class&&pack.class[lang]?Object.assign({}, pack.class[lang]):{};
     if(r==='custom'&&custom&&custom.cls) Object.assign(table, custom.cls);
     activeClass=table;
+    indexRev();
+  }
+  function indexRev(){
+    REV={};
+    if(!pack) return;
+    ['hans','hant'].forEach(function(lang){
+      var dict=pack[lang]||{};
+      Object.keys(dict).forEach(function(en){
+        var zh=dict[en];
+        if(!zh || zh.length>48) return;
+        var prev=REV[zh];
+        var upper=en===en.toUpperCase();
+        var prevUpper=prev && prev===prev.toUpperCase();
+        if(!prev || en.length<prev.length || (en.length===prev.length && prevUpper && !upper)) REV[zh]=en;
+      });
+    });
   }
 
   function fold(t){ return String(t||'').replace(/-/g,' ').replace(/\s+/g,' ').trim(); }
@@ -206,6 +222,8 @@
 
   SC.loc={
     text:text,
+    english:function(s){ if(!s||!REV) return ''; return REV[String(s).trim()]||''; },
+    index:function(){ return ensurePack().then(function(){ rebuild(); return pack; }); },
     item:item,
     mode:function(){ return mode; },
     resolved:resolved,
