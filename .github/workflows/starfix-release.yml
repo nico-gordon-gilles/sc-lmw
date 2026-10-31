@@ -1,0 +1,79 @@
+name: Publish Starfix
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "companion/**"
+      - ".github/workflows/starfix-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: starfix-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Read the Starfix version
+        id: ver
+        working-directory: companion
+        shell: pwsh
+        run: |
+          $v = (Get-Content -Raw VERSION).Trim()
+          if ($v -notmatch '^\d+\.\d+\.\d+$') { throw "companion/VERSION must look like 1.2.3" }
+          "version=$v" >> $env:GITHUB_OUTPUT
+      - name: See if this version is already published
+        id: rel
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "starfix-${{ steps.ver.outputs.version }}"
+          $uri = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/releases/tags/$tag"
+          $headers = @{
+            Authorization = "Bearer $env:GH_TOKEN"
+            Accept = "application/vnd.github+json"
+            "X-GitHub-Api-Version" = "2022-11-28"
+          }
+          $resp = Invoke-WebRequest -Headers $headers -Uri $uri -SkipHttpErrorCheck
+          if ($resp.StatusCode -eq 200) {
+            "exists=true" >> $env:GITHUB_OUTPUT
+            Write-Host "Release $tag is already published and is left unchanged."
+          } elseif ($resp.StatusCode -eq 404) {
+            "exists=false" >> $env:GITHUB_OUTPUT
+            Write-Host "Release $tag is not published yet."
+          } else {
+            Write-Host $resp.Content
+            exit 1
+          }
+          exit 0
+      - name: Build Starfix.exe
+        if: steps.rel.outputs.exists != 'true'
+        working-directory: companion
+        run: |
+          python -m pip install --disable-pip-version-check pyinstaller
+          python write_version_info.py
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name Starfix --icon icon.ico --version-file file_version.txt --hidden-import history --add-data "icon.png;." --add-data "icon.ico;." --add-data "index.html;." --add-data "VERSION;." --add-data "..\css\starmap.css;css" app.py
+      - name: Publish the release
+        if: steps.rel.outputs.exists != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: starfix-${{ steps.ver.outputs.version }}
+          name: Starfix ${{ steps.ver.outputs.version }}
+          make_latest: true
+          files: companion/dist/Starfix.exe
+          body: |
+            Starfix ${{ steps.ver.outputs.version }}
+            Windows build of the optional log reader. The source is in companion/.
+            It only reads Game.log on the computer where you run it.
+            The program compares this version with GitHub Releases when it starts.
+          generate_release_notes: false

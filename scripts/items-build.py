@@ -52,6 +52,58 @@ def build_vehicles():
     return out
 
 
+def ore_base(name):
+    import re
+    s = re.sub(r"\s*\((raw|ore|r)\)\s*$", "", (name or "").lower(), flags=re.I)
+    return re.sub(r"^raw\s+", "", s).strip()
+
+
+def mine_names():
+    import json
+    names = set()
+    if not C.DATA_DIR.is_dir():
+        return names
+    for path in C.DATA_DIR.glob("sys-*.json"):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        for groups in (data.get("mining") or {}).values():
+            for group in groups:
+                for dep in group.get("deps") or []:
+                    for part in dep.get("parts") or []:
+                        if part.get("ore") and not str(part["ore"]).lower().startswith("inert"):
+                            names.add(part["ore"])
+    return names
+
+
+def build_ores():
+    """UEX-Warennummer je abbaubarem Erz: ido = roh, idr = raffiniert.
+    UEX commodity id per mineable ore: ido = raw, idr = refined."""
+    rows = C.get(C.UEX_API + "commodities").get("data") or []
+    wanted = {ore_base(n) for n in mine_names()}
+    by = {}
+    for row in rows:
+        key = ore_base(row.get("name"))
+        if wanted and key not in wanted:
+            continue
+        if not wanted and not (row.get("is_raw") or row.get("is_refined") or row.get("is_mineral")):
+            continue
+        slot = by.setdefault(key, {"n": row.get("name") or "", "code": row.get("code") or ""})
+        if row.get("is_refined"):
+            slot["idr"] = row["id"]
+            slot["n"] = row.get("name") or slot["n"]
+            if row.get("code"):
+                slot["code"] = row["code"]
+        elif row.get("is_raw"):
+            slot["ido"] = row["id"]
+            if not slot.get("idr"):
+                slot["n"] = (row.get("name") or slot["n"]).replace(" (Ore)", "").replace(" (Raw)", "").replace(" (R)", "")
+            if row.get("code") and not slot.get("code"):
+                slot["code"] = row["code"]
+    return sorted(by.values(), key=lambda o: o["n"].lower())
+
+
 def main():
     C.ensure_dirs()
     items = build_items()
@@ -61,6 +113,10 @@ def main():
     ships = build_vehicles()
     C.write_json(C.DATA_DIR / "vehicles.json", {"ships": ships})
     print("data/vehicles.json: %d Eintraege/entries" % len(ships))
+
+    ores = build_ores()
+    C.write_json(C.DATA_DIR / "ores.json", {"ores": ores})
+    print("data/ores.json: %d Eintraege/entries" % len(ores))
 
 
 if __name__ == "__main__":

@@ -15,8 +15,10 @@
  *   data-players-url    siehe/see docs/PLAYERS_API.md (Default: <base>players.example.json)
  *   data-players-headers JSON-Objekt als String, z.B. '{"Authorization":"Bearer xyz"}' / JSON object as a string
  *   data-poll-ms        Abfrage-Intervall in ms / poll interval in ms (Default: 30000)
- *   data-lang           Oberflaechensprache 'auto'|'de'|'en' / UI language 'auto'|'de'|'en'
+ *   data-lang           'auto'|'de'|'en'|'zh-Hans'|'zh-Hant' (zh-CN / zh-TW aliases work)
  *                        (Default: config.js LANG, sonst/otherwise 'auto' -- siehe js/i18n.js)
+ *   data-theme          'classic'|'compact'|'practical'|'chassis'|'scifi'|'haze'
+ *                        (Default: config.js THEME, sonst/otherwise 'haze')
  *
  * See CREDITS.md / LICENSE. Unofficial fan project, not affiliated with CIG/RSI.
  */
@@ -56,6 +58,7 @@
   var playersUrl = attr('data-players-url', null);
   var pollMsRaw = attr('data-poll-ms', null);
   var lang = attr('data-lang', null);
+  var theme = attr('data-theme', null);
   var headersRaw = attr('data-players-headers', null);
   var playersHeaders = null;
   if(headersRaw){
@@ -73,10 +76,12 @@
     window.SCLMW.mount(el, {
       base: base,
       lang: lang || undefined,
+      theme: theme || undefined,
       playersUrl: playersUrl || undefined,
       playersHeaders: playersHeaders || undefined,
       pollMs: pollMsRaw!=null ? parseInt(pollMsRaw,10) : undefined
     });
+    if(window.SCLMW.room) window.SCLMW.room.start();
   }
 
   loadCss(base+'css/starmap.css');
@@ -85,9 +90,11 @@
   // js/i18n.js first (defines window.SCLMW.i18n), then holo.js (defines window.SCLMW.xyz), then
   // starmap.js (defines window.SCLMW.mount/unmount and calls both).
   loadScript(base+'js/i18n.js')
+    .then(function(){ return loadScript(base+'js/icons.js'); })
     .then(function(){ return loadScript(base+'js/holo.js'); })
     .then(function(){ return loadScript(base+'js/guides.js'); })
     .then(function(){ return loadScript(base+'js/starmap.js'); })
+    .then(function(){ return loadScript(base+'js/room.js'); })
     .then(function(){
       if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
       else boot();

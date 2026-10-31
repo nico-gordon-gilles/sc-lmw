@@ -17,3 +17,19 @@ __pycache__/
 # Local secrets, should never exist in this repo but just in case.
 .env
 *.local
+
+# Room database created when server/room_server.py runs on this machine.
+server/*.sqlite
+
+# Companion settings, including the room token. This stays on this computer.
+companion/config.json
+companion/history.jsonl
+companion/build/
+companion/dist/
+companion/file_version.txt
+companion/dist-next/
+companion/*.spec
+
+# Local game-language files used to build Chinese names. Kept on disk only,
+# the same way as the downloaded German INI.
+/Language/

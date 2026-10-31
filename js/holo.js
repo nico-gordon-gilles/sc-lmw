@@ -27,7 +27,8 @@
   function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
   function load(src){ if(SCRIPTS[src]) return SCRIPTS[src];
     return SCRIPTS[src]=new Promise(function(ok,no){ var s=document.createElement('script'); s.src=src; s.onload=ok; s.onerror=function(){ delete SCRIPTS[src]; no(new Error('Laden fehlgeschlagen: '+src)); }; document.head.appendChild(s); }); }
-  function three(){ return (window.THREE?Promise.resolve():load(BASE+'vendor/three/three.min.js'))
+  function threeCore(){ return window.THREE?Promise.resolve():load(BASE+'vendor/three/three.min.js'); }
+  function three(){ return threeCore()
     .then(function(){ return Promise.all([THREE.GLTFLoader?0:load(BASE+'vendor/three/examples/GLTFLoader.js'), THREE.OrbitControls?0:load(BASE+'vendor/three/examples/OrbitControls.js'), THREE.DRACOLoader?0:load(BASE+'vendor/three/examples/DRACOLoader.js')]); }); }
   // FleetYards-Modelle sind Draco-komprimiert: ohne Decoder laedt keins.
   var DRACO=null; function draco(){ if(!DRACO){ DRACO=new THREE.DRACOLoader(); DRACO.setDecoderPath(BASE+'vendor/three/draco/'); } return DRACO; }
@@ -68,6 +69,7 @@
       if(!MODELS[url]) MODELS[url]=new Promise(function(ok,no){ (function(){ var gl=new THREE.GLTFLoader(); gl.setDRACOLoader(draco()); return gl; })().load(url,function(g){ ok(g.scene); },undefined,no); });
       return MODELS[url]; }).then(function(src){
       var g=holoScene(src,color,op||{line:.16,fill:.22}); g.scale.multiplyScalar(0.1); var w=new THREE.Group(); w.add(g); return w; }); };
+  SC.loadThreeCore=threeCore;
   SC.loadThree=three;
   SC.holo=function(el, url, o){ o=o||{};
     if(!el||!url) return;

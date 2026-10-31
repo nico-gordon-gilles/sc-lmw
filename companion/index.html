@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Starfix</title>
+<link rel="stylesheet" href="/css/starmap.css">
+<style>
+  .sc-lmw.st-companion{min-height:100vh;background:var(--sclmw-bg)}
+  .sc-lmw.st-companion .st-gate{background:var(--sclmw-bg)}
+  .sc-lmw.st-companion .theme-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  .sc-lmw.st-companion .theme-row button.on{color:#04131b;background:var(--sclmw-cyan);border-color:var(--sclmw-cyan)}
+  .sc-lmw.st-companion textarea{width:100%;box-sizing:border-box;min-height:72px;margin-top:4px;padding:8px 10px;border:1px solid var(--sclmw-line2);background:transparent;color:var(--sclmw-ink);font:inherit;font-size:13px}
+  .sc-lmw.st-companion .place{margin:12px 0 0;font-size:18px;letter-spacing:.04em;color:var(--sclmw-ink)}
+  .sc-lmw.st-companion summary{cursor:pointer;color:var(--sclmw-muted);font-size:13px;margin-top:12px}
+</style>
+</head>
+<body>
+<div class="sc-lmw st-companion" id="app" data-theme="compact">
+  <div class="st-gate">
+    <div class="st-gate-card">
+      <h1>Starfix</h1>
+      <p>双击 Starfix 会打开程序自己的窗口，不用打开浏览器。它只在本机运行，读取 Game.log，把换区时写下的地点代码发给你的房间。它不进入游戏进程，不读内存，也不改游戏文件。每次打开都会先要求同意使用条款。</p>
+      <p id="linked">还没连上房间。在星图的房间面板里点「连到这台电脑」，再回到这里点确认。</p>
+      <div id="pair" hidden>
+        <p id="pairText"></p>
+        <div class="row">
+          <button type="button" class="act" id="pairYes">确认连接</button>
+          <button type="button" id="pairNo">取消</button>
+        </div>
+      </div>
+
+      <label>Game.log<input id="log"></label>
+      <details>
+        <summary>手动填写</summary>
+        <label>星图地址<input id="api" value="https://sclmw.cltbbs.com"></label>
+        <label>房间码<input id="room" maxlength="9" placeholder="K7MQ-4R2P"></label>
+      </details>
+
+      <div class="st-room-sec"><span>外观</span>
+        <div class="theme-row" id="themes">
+          <button type="button" data-theme="classic">经典</button>
+          <button type="button" data-theme="compact" class="on">紧凑</button>
+          <button type="button" data-theme="practical">实用</button>
+          <button type="button" data-theme="chassis">机壳</button>
+          <button type="button" data-theme="scifi">科幻</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <button type="button" class="act" id="watch">开始监视</button>
+        <button type="button" id="scan">读日志里最近的地点</button>
+      </div>
+      <p class="place" id="place">还没有地点</p>
+      <p id="meta"></p>
+      <p class="st-room-err" id="err"></p>
+
+      <label>用一行日志试解析<textarea id="sample"><2026-10-27T07:00:00.000Z> [Notice] &lt;Requesting Transition&gt; Loading | Ready | Stanton | host [1] | Transitioning from zone Stanton3 in Stanton to zone RR_HUR_Lorville in Stanton [Team][Loading]</textarea></label>
+      <div class="row">
+        <button type="button" id="parse">只解析</button>
+        <button type="button" id="send">解析并发送</button>
+        <button type="button" id="quit">退出</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  var app = document.getElementById('app');
+  var fields = {api:'apiBase', room:'room', log:'logPath'};
+  function val(id){ return document.getElementById(id).value.trim(); }
+  function body(extra){
+    var out = {
+      apiBase: val('api'),
+      room: val('room'),
+      logPath: val('log'),
+      theme: app.getAttribute('data-theme') || 'compact'
+    };
+    if(extra) Object.keys(extra).forEach(function(k){ out[k] = extra[k]; });
+    return out;
+  }
+  function paint(s){
+    if(!s) return;
+    app.setAttribute('data-theme', s.theme || 'compact');
+    document.querySelectorAll('#themes button').forEach(function(b){
+      b.classList.toggle('on', b.getAttribute('data-theme') === s.theme);
+    });
+    var place = s.place;
+    document.getElementById('place').textContent = place ? (place.code + (place.system ? ' · ' + place.system : '')) : '还没有地点';
+    var bits = [s.running ? '正在监视' : '没有监视', s.status || ''];
+    if(s.sentAt) bits.push('上次发送 ' + s.sentAt);
+    bits.push(s.logKind === 'empty' ? '日志状态：空内容' : (s.logKind === 'ok' || s.logExists ? '日志状态：正常' : '日志状态：故障'));
+    document.getElementById('meta').textContent = bits.filter(Boolean).join(' · ');
+    document.getElementById('err').textContent = s.error || '';
+    document.getElementById('watch').textContent = s.running ? '停止监视' : '开始监视';
+    var box = document.getElementById('pair');
+    if(s.pendingRoom){
+      box.hidden = false;
+      document.getElementById('pairText').textContent = '星图要连上房间 ' + s.pendingRoom + '。确认后，这台电脑会把地点发到这个房间。';
+    } else box.hidden = true;
+    document.getElementById('linked').textContent = (s.room && s.tokenSet)
+      ? ('已连上房间 ' + s.room)
+      : '还没连上房间。在星图的房间面板里点「连到这台电脑」，再回到这里点确认。';
+  }
+  function post(url, extra){
+    return fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body(extra))})
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if(d.error) document.getElementById('err').textContent = d.error;
+        var view = d.state || d;
+        if(d.place) view = Object.assign({}, view, {place:d.place});
+        paint(view);
+        return d;
+      });
+  }
+  fetch('/api/status').then(function(r){ return r.json(); }).then(function(s){
+    document.getElementById('api').value = s.apiBase || '';
+    document.getElementById('room').value = s.room || '';
+    document.getElementById('log').value = s.logPath || '';
+    paint(s);
+  });
+  document.getElementById('themes').onclick = function(e){
+    var b = e.target.closest('button');
+    if(!b) return;
+    app.setAttribute('data-theme', b.getAttribute('data-theme'));
+    post('/api/settings');
+  };
+  document.getElementById('watch').onclick = function(){
+    var on = document.getElementById('watch').textContent.indexOf('停止') !== 0;
+    post('/api/watch', {on:on});
+  };
+  document.getElementById('scan').onclick = function(){ post('/api/scan'); };
+  function pair(path){
+    fetch(path, {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'})
+      .then(function(r){ return r.json(); })
+      .then(function(s){
+        if(s.room) document.getElementById('room').value = s.room;
+        if(s.apiBase) document.getElementById('api').value = s.apiBase;
+        paint(s);
+      });
+  }
+  document.getElementById('pairYes').onclick = function(){ pair('/api/pair/yes'); };
+  document.getElementById('pairNo').onclick = function(){ pair('/api/pair/no'); };
+  document.getElementById('parse').onclick = function(){ post('/api/try', {line:document.getElementById('sample').value, send:false}); };
+  document.getElementById('send').onclick = function(){ post('/api/try', {line:document.getElementById('sample').value, send:true}); };
+  document.getElementById('quit').onclick = function(){
+    fetch('/api/quit', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'}).catch(function(){});
+    document.getElementById('meta').textContent = '已退出。可以关掉这个页面。';
+  };
+  setInterval(function(){ fetch('/api/status').then(function(r){ return r.json(); }).then(paint); }, 1500);
+})();
+</script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 {
   "name": "sc-lmw",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "SC LMW -- Star Citizen LiveMap Wiki: an unofficial, standalone, open-source 3D star map for Star Citizen (Stanton, Pyro, Nyx). No login, no build step, no server required beyond a static file host.",
   "license": "AGPL-3.0-only",
   "private": true,

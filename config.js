@@ -29,17 +29,25 @@ window.LIVEMAP_CONFIG = {
   // https://fleetyards.net/api/v1 -- please credit FleetYards, see CREDITS.md.
   FLEETYARDS_API_BASE: 'https://fleetyards.net/api/v1',
 
-  // Default language for in-game text (item/location names): 'de' or 'en'. This is the OLD
-  // toggle (the small "DE"/"EN" button in the map, ST_LANG in js/starmap.js): mission types,
-  // amenity names, the German INI description. It does NOT affect the interface itself.
+  // In-game text follows the interface language (js/starmap.js syncGameLang): Deutsch uses
+  // German mission types and amenity names, every other interface language uses English.
+  // Chinese place names come from js/loc.js. There is no separate DE/EN button.
   DEFAULT_LANG: 'en',
 
-  // Interface language ('auto' | 'de' | 'en', default 'auto' = browser language: de* -> German,
-  // else English). This is the NEW, SEPARATE toggle for the UI chrome itself (buttons, panels,
-  // search, legend, error messages, number/date format) -- see js/i18n.js. It never touches
-  // DEFAULT_LANG above, and vice versa: the two buttons in the map can independently be on
-  // German or English. Can also be set per embed via the sc-lmw.js script tag's data-lang
-  // attribute, or passed directly as mount(el,{lang:'de'}). The visitor's own choice (the
-  // small language switch next to the map) is remembered in localStorage and wins over this.
-  LANG: 'auto'
+  // Interface language: 'auto' | 'de' | 'en' | 'zh-Hans' | 'zh-Hant'.
+  // 'auto' follows the browser: zh-TW / zh-HK / zh-MO -> Traditional Chinese, other zh* ->
+  // Simplified Chinese, de* -> German, otherwise English. Aliases zh, zh-CN, zh-SG and
+  // zh-TW, zh-HK, zh-MO are accepted. This is only the UI chrome (buttons, panels, search,
+  // legend, errors, numbers) -- see js/i18n.js. It never touches DEFAULT_LANG above.
+  // Set per embed with data-lang, or mount(el,{lang:'zh-Hans'}). The visitor's own choice
+  // is remembered in localStorage and wins over this.
+  LANG: 'auto',
+
+  // Interface theme: 'classic' | 'compact' | 'practical' | 'chassis' | 'scifi' | 'haze'.
+  // haze is the default. classic is the original look, compact is dense and flat,
+  // practical is easier to read, chassis is a metal instrument case,
+  // scifi is a holographic console.
+  // data-theme on the script tag, or mount(el,{theme:'chassis'}).
+  // The visitor's own choice is remembered in localStorage and wins over this.
+  THEME: 'haze'
 };
